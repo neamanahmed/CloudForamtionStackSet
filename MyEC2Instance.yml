@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  ImageId:
+      Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+      Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-kernel-5.10-hvm-x86_64-gp2
+Mappings:
+  MyRegionMap:
+    me-south-1:
+      instanceType: t3.micro
+    eu-central-1:
+      instanceType: t2.micro     
+
+
+Resources:
+   MyEC2Instance:
+     Type: AWS::EC2::Instance
+     Properties:
+       KeyName: dwc-p01
+       ImageId: !Ref ImageId
+       IamInstanceProfile: CodeDeployDemo-EC2-Instance-Profile
+       InstanceType: !FindInMap 
+         - MyRegionMap
+         - !Ref 'AWS::Region'
+         - instanceType
+       Tags:
+         - Key: Name
+           Value: MyEC2Instance
+         - Key: Environment
+           Value: Development         
+       UserData:
+          Fn::Base64: 
+            !Sub |
+            #!/bin/bash -x
+            sudo yum update -y
+            sudo yum install ruby wget -y
+            CODEDEPLOY_BIN="/opt/codedeploy-agent/bin/codedeploy-agent"
+            $CODEDEPLOY_BIN stop
+            yum erase codedeploy-agent -y
+            cd /home/ec2-user
+            wget https://aws-codedeploy-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/latest/install 
+            chmod +x ./install
+            sudo ./install auto
+            sudo systemctl start codedeploy-agent
+            sudo systemctl status codedeploy-agent
+Outputs:
+  MyEC2Instance:
+    Description: IPAddress MyEC2Instance
+    Value: !GetAtt MyEC2Instance.PublicIp
+    Export:
+      Name: MyEC2Instance-PublicIp
